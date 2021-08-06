@@ -3,6 +3,16 @@ from django.db.models import Sum
 from ckeditor.fields import RichTextField
 from video_page.models import Video
 from mptt.models import MPTTModel, TreeForeignKey
+from django.shortcuts import reverse
+
+class Manufacturer(models.Model):
+    name = models.CharField(max_length=50)
+    slug = models.SlugField()
+    
+
+    def __str__(self):
+        return self.name
+
 
 class ProductCategory(MPTTModel):
     title = models.CharField(max_length=50)
@@ -17,17 +27,28 @@ class ProductCategory(MPTTModel):
     def __str__(self):
         return self.title
     
+    def get_absolute_url(self):
+        try:
+            if self.parent.parent:
+                return reverse("products_parent2", kwargs={"category": self.slug, "parent":self.parent.slug, "parent2":self.parent.parent.slug})
+
+            if self.parent:
+                return reverse("products_parent", kwargs={"category": self.slug, "parent":self.parent.slug})
+        except AttributeError:
+            pass
+        return reverse("products", kwargs={"category": self.slug, })
+    
+
 
 class Product(models.Model):
     name = models.CharField(max_length=50)
-    main_image = models.ImageField(upload_to='images', blank=True)
     description = RichTextField()
-    inner_number = models.IntegerField()
+    inner_number = models.CharField(max_length=50)
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE)
-    manufacturer = models.CharField(max_length=50)
+    manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
     unit = models.CharField(max_length=50)
     old_price = models.IntegerField()
-    promo_price = models.IntegerField()
+    promo_price = models.IntegerField(blank=True, null=True)
     in_stock = models.IntegerField()
     uploads = models.FileField(upload_to='uploads', blank=True)
     is_new_product = models.BooleanField()
@@ -48,8 +69,20 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+
     def get_absolute_url(self):
-        return reverse("Product_detail", kwargs={"slug": self.slug})
+        return reverse("products-detail", kwargs={
+            "slug": self.slug,
+            "category": self.category.slug,
+            "parent": self.category.parent.slug,
+            "parent2": self.category.parent.parent.slug
+            }
+        )
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='images')
 
 
 class ProductCharacteristic(models.Model):
@@ -63,9 +96,9 @@ class ProductCharacteristic(models.Model):
         verbose_name_plural = "ProductCharacteristics"
 
 
+
 class PromotionPacket(models.Model):
     name = models.CharField(max_length=50)
-    main_image = models.ImageField(upload_to='images', blank=True)
     products = models.ManyToManyField(Product)
     unit = models.IntegerField()
     category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE)
